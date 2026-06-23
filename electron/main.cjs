@@ -12,6 +12,11 @@ const devServerUrl = devServerArg ? devServerArg.split("=").slice(1).join("=") :
 let mainWindow = null;
 let collectorProcess = null;
 let collectorLog = [];
+let collectorWanted = false;
+let collectorRestartTimer = null;
+let collectorRestartCount = 0;
+
+const maxCollectorRestarts = 5;
 
 function sendStatus() {
   if (!mainWindow) return;
@@ -30,6 +35,9 @@ function appendLog(type, text) {
 
   for (const line of lines) {
     collectorLog.push({ type, text: line, at: new Date().toISOString() });
+    if (line.includes("Listening for QQ notifications")) {
+      collectorRestartCount = 0;
+    }
   }
 
   collectorLog = collectorLog.slice(-200);
@@ -58,7 +66,14 @@ function createWindow() {
   }
 }
 
-function startCollector() {
+function clearCollectorRestartTimer() {
+  if (collectorRestartTimer) {
+    clearTimeout(collectorRestartTimer);
+    collectorRestartTimer = null;
+  }
+}
+
+function spawnCollectorProcess() {
   if (collectorProcess) {
     return { ok: true, running: true };
   }
@@ -68,7 +83,9 @@ function startCollector() {
   collectorProcess = spawn(
     "powershell.exe",
     [
+      "-NoLogo",
       "-NoProfile",
+      "-NonInteractive",
       "-ExecutionPolicy",
       "Bypass",
       "-File",
@@ -88,9 +105,15 @@ function startCollector() {
 
   collectorProcess.stdout.on("data", (data) => appendLog("stdout", data));
   collectorProcess.stderr.on("data", (data) => appendLog("stderr", data));
+  collectorProcess.on("error", (error) => {
+    appendLog("stderr", `Collector process error: ${error.message}`);
+  });
   collectorProcess.on("exit", (code, signal) => {
     appendLog("info", `Collector exited, code=${code}, signal=${signal ?? ""}`);
     collectorProcess = null;
+    if (collectorWanted) {
+      scheduleCollectorRestart();
+    }
     sendStatus();
   });
 
@@ -98,7 +121,40 @@ function startCollector() {
   return { ok: true, running: true };
 }
 
+function scheduleCollectorRestart() {
+  if (!collectorWanted || collectorRestartTimer || collectorProcess) {
+    return;
+  }
+
+  if (collectorRestartCount >= maxCollectorRestarts) {
+    appendLog("stderr", `Collector restart limit reached (${maxCollectorRestarts}).`);
+    collectorWanted = false;
+    sendStatus();
+    return;
+  }
+
+  collectorRestartCount++;
+  const delayMs = Math.min(collectorRestartCount * 1000, 5000);
+  appendLog("info", `Collector will restart in ${delayMs}ms, attempt ${collectorRestartCount}/${maxCollectorRestarts}`);
+  collectorRestartTimer = setTimeout(() => {
+    collectorRestartTimer = null;
+    if (collectorWanted && !collectorProcess) {
+      spawnCollectorProcess();
+    }
+  }, delayMs);
+}
+
+function startCollector() {
+  collectorWanted = true;
+  clearCollectorRestartTimer();
+  return spawnCollectorProcess();
+}
+
 function stopCollector() {
+  collectorWanted = false;
+  collectorRestartCount = 0;
+  clearCollectorRestartTimer();
+
   if (!collectorProcess) {
     return { ok: true, running: false };
   }
@@ -159,6 +215,8 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => {
+  collectorWanted = false;
+  clearCollectorRestartTimer();
   if (collectorProcess) {
     collectorProcess.kill();
   }
