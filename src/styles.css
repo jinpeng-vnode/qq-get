@@ -61,6 +61,17 @@ body {
   margin-bottom: 16px;
 }
 
+.searchHint {
+  margin-top: 8px;
+}
+
+.hit {
+  padding: 0 2px;
+  border-radius: 3px;
+  background: #fef08a;
+  color: #854d0e;
+}
+
 .logs {
   margin-top: 16px;
 }

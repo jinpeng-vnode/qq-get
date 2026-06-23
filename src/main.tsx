@@ -9,10 +9,67 @@ import "./styles.css";
 const { Header, Content } = Layout;
 const { Text, Title } = Typography;
 
+type SearchQuery = {
+  include: string[];
+  exclude: string[];
+};
+
 function formatTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString("zh-CN", { hour12: false });
+}
+
+function parseSearchQuery(value: string): SearchQuery {
+  const tokens = value.match(/"[^"]+"|\S+/g) ?? [];
+  const include: string[] = [];
+  const exclude: string[] = [];
+
+  for (const token of tokens) {
+    const isExclude = token.startsWith("-") && token.length > 1;
+    const raw = isExclude ? token.slice(1) : token;
+    const normalized = raw.replace(/^"|"$/g, "").trim().toLowerCase();
+    if (!normalized) continue;
+    (isExclude ? exclude : include).push(normalized);
+  }
+
+  return { include, exclude };
+}
+
+function getSearchText(item: QQMessage) {
+  return [item.groupName, item.senderName, item.content, item.rawText]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function HighlightText({ value, terms }: { value?: string | null; terms: string[] }) {
+  if (!value) return <Text type="secondary">未知</Text>;
+
+  const visibleTerms = terms.filter(Boolean);
+  if (visibleTerms.length === 0) return <>{value}</>;
+
+  const pattern = new RegExp(`(${visibleTerms.map(escapeRegExp).join("|")})`, "gi");
+  const parts = value.split(pattern);
+
+  return (
+    <>
+      {parts.map((part, index) => {
+        const matched = visibleTerms.some((term) => part.toLowerCase() === term.toLowerCase());
+        return matched ? (
+          <mark key={`${part}-${index}`} className="hit">
+            {part}
+          </mark>
+        ) : (
+          <React.Fragment key={`${part}-${index}`}>{part}</React.Fragment>
+        );
+      })}
+    </>
+  );
 }
 
 function useInterval(callback: () => void, delay: number) {
@@ -84,15 +141,18 @@ function Dashboard() {
     }
   }
 
+  const parsedQuery = React.useMemo(() => parseSearchQuery(query), [query]);
+
   const filteredMessages = React.useMemo(() => {
-    const value = query.trim().toLowerCase();
-    if (!value) return messages;
-    return messages.filter((item) =>
-      [item.groupName, item.senderName, item.content, item.rawText]
-        .filter(Boolean)
-        .some((part) => String(part).toLowerCase().includes(value))
-    );
-  }, [messages, query]);
+    if (parsedQuery.include.length === 0 && parsedQuery.exclude.length === 0) return messages;
+
+    return messages.filter((item) => {
+      const text = getSearchText(item);
+      const includesAll = parsedQuery.include.every((term) => text.includes(term));
+      const excludesAll = parsedQuery.exclude.every((term) => !text.includes(term));
+      return includesAll && excludesAll;
+    });
+  }, [messages, parsedQuery]);
 
   React.useEffect(() => {
     setCurrentPage(1);
@@ -116,19 +176,20 @@ function Dashboard() {
       dataIndex: "groupName",
       width: 260,
       ellipsis: true,
-      render: (value?: string | null) => value || <Text type="secondary">未知</Text>,
+      render: (value?: string | null) => <HighlightText value={value} terms={parsedQuery.include} />,
     },
     {
       title: "发送者",
       dataIndex: "senderName",
       width: 160,
       ellipsis: true,
-      render: (value?: string | null) => value || <Text type="secondary">未知</Text>,
+      render: (value?: string | null) => <HighlightText value={value} terms={parsedQuery.include} />,
     },
     {
       title: "内容",
       dataIndex: "content",
       ellipsis: true,
+      render: (value?: string | null) => <HighlightText value={value} terms={parsedQuery.include} />,
     },
   ];
 
@@ -170,10 +231,15 @@ function Dashboard() {
             <Input
               allowClear
               prefix={<SearchOutlined />}
-              placeholder="搜索群名、发送者或内容"
+              placeholder='关键词搜索：空格=全部命中，-广告=排除，"完整短语"=短语匹配'
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
+            <div className="searchHint">
+              <Text type="secondary">
+                示例：<Text code>Claude Kiro -广告</Text> 会查同时包含 Claude 和 Kiro、且不包含广告的通知。
+              </Text>
+            </div>
           </section>
 
           <Table
