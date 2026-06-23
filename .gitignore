@@ -1,0 +1,12 @@
+node_modules/
+dist/
+data/
+downloads/
+tools/
+samples/
+qq-chat-exporter/
+.playwright-mcp/
+
+*.log
+*.tmp
+napcat-*.png
