@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const { spawn } = require("node:child_process");
 
 const rootDir = app.getAppPath();
-const dataFile = path.join(rootDir, "data", "qq-notifications.jsonl");
+const dataDir = path.join(rootDir, "data");
 const collectorScript = path.join(rootDir, "scripts", "qq-notification-collector.ps1");
 const devServerArg = process.argv.find((arg) => arg.startsWith("--dev-server="));
 const devServerUrl = devServerArg ? devServerArg.split("=").slice(1).join("=") : "";
@@ -63,7 +63,7 @@ function startCollector() {
     return { ok: true, running: true };
   }
 
-  fs.mkdirSync(path.dirname(dataFile), { recursive: true });
+  fs.mkdirSync(dataDir, { recursive: true });
 
   collectorProcess = spawn(
     "powershell.exe",
@@ -73,8 +73,8 @@ function startCollector() {
       "Bypass",
       "-File",
       collectorScript,
-      "-OutFile",
-      dataFile,
+      "-OutDir",
+      dataDir,
       "-IntervalSeconds",
       "2",
     ],
@@ -112,23 +112,30 @@ function stopCollector() {
 }
 
 function readMessages() {
-  if (!fs.existsSync(dataFile)) {
+  if (!fs.existsSync(dataDir)) {
     return [];
   }
 
   return fs
-    .readFileSync(dataFile, "utf8")
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map((line) => {
-      try {
-        return JSON.parse(line);
-      } catch {
-        return null;
-      }
+    .readdirSync(dataDir)
+    .filter((fileName) => /^qq-notifications-\d{4}-\d{2}-\d{2}\.jsonl$/.test(fileName))
+    .sort()
+    .flatMap((fileName) => {
+      const filePath = path.join(dataDir, fileName);
+      return fs
+        .readFileSync(filePath, "utf8")
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .map((line) => {
+          try {
+            return { ...JSON.parse(line), sourceFile: fileName };
+          } catch {
+            return null;
+          }
+        });
     })
     .filter(Boolean)
-    .reverse();
+    .sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime());
 }
 
 ipcMain.handle("collector:start", () => startCollector());
@@ -139,7 +146,7 @@ ipcMain.handle("collector:status", () => ({
   log: collectorLog.slice(-80),
 }));
 ipcMain.handle("messages:list", () => readMessages());
-ipcMain.handle("messages:path", () => dataFile);
+ipcMain.handle("messages:path", () => dataDir);
 
 app.whenReady().then(() => {
   createWindow();

@@ -40,10 +40,10 @@ npm run dev
 .\start-qq-notification-collector.bat
 ```
 
-Output is written to:
+Output is written by day to:
 
 ```text
-data\qq-notifications.jsonl
+data\qq-notifications-YYYY-MM-DD.jsonl
 ```
 
 Each line is one JSON event with `groupName`, `senderName`, `content`, `receivedAt`, and `rawText`.

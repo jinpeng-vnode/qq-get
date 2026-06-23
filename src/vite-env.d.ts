@@ -22,6 +22,7 @@ type QQMessage = {
   senderName?: string | null;
   content: string;
   rawText: string;
+  sourceFile?: string;
 };
 
 interface Window {

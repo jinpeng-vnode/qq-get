@@ -29,6 +29,7 @@ function Dashboard() {
   const [dataPath, setDataPath] = React.useState("");
   const [query, setQuery] = React.useState("");
   const [loading, setLoading] = React.useState(false);
+  const [currentPage, setCurrentPage] = React.useState(1);
 
   const loadMessages = React.useCallback(async () => {
     const rows = await window.qqCollector.listMessages();
@@ -93,6 +94,16 @@ function Dashboard() {
     );
   }, [messages, query]);
 
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [query]);
+
+  React.useEffect(() => {
+    if (!query.trim()) {
+      setCurrentPage(1);
+    }
+  }, [messages.length, query]);
+
   const columns: ColumnsType<QQMessage> = [
     {
       title: "时间",
@@ -150,7 +161,7 @@ function Dashboard() {
             <Statistic title="已记录通知" value={messages.length} />
             <Statistic title="当前筛选" value={filteredMessages.length} />
             <div className="path">
-              <Text type="secondary">数据文件</Text>
+              <Text type="secondary">数据目录</Text>
               <Text copyable ellipsis>{dataPath}</Text>
             </div>
           </section>
@@ -169,7 +180,13 @@ function Dashboard() {
             rowKey="id"
             columns={columns}
             dataSource={filteredMessages}
-            pagination={{ pageSize: 20, showSizeChanger: true }}
+            pagination={{
+              current: currentPage,
+              pageSize: 10,
+              showSizeChanger: false,
+              showTotal: (total) => `共 ${total} 条`,
+              onChange: (page) => setCurrentPage(page),
+            }}
             size="middle"
             scroll={{ x: 900 }}
           />

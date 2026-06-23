@@ -1,5 +1,6 @@
 param(
     [string]$OutFile = "data\qq-notifications.jsonl",
+    [string]$OutDir = "",
     [int]$IntervalSeconds = 2,
     [string[]]$AppNames = @("QQ", "QQNT"),
     [switch]$Once,
@@ -118,6 +119,44 @@ function Get-QQNotifications {
     return $rows
 }
 
+function Get-OutputFile {
+    if (-not [string]::IsNullOrWhiteSpace($OutDir)) {
+        $date = Get-Date -Format "yyyy-MM-dd"
+        return Join-Path $OutDir "qq-notifications-$date.jsonl"
+    }
+
+    return $OutFile
+}
+
+function Ensure-OutputFile {
+    param([string]$Path)
+
+    $dir = Split-Path -Parent $Path
+    if ($dir) {
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    }
+}
+
+function Load-SeenIds {
+    param([string]$Path)
+
+    $ids = [System.Collections.Generic.HashSet[string]]::new()
+    if (Test-Path $Path) {
+        Get-Content -LiteralPath $Path -ErrorAction SilentlyContinue | ForEach-Object {
+            try {
+                $existing = $_ | ConvertFrom-Json
+                if ($existing.id) {
+                    [void]$ids.Add([string]$existing.id)
+                }
+            } catch {
+                # Ignore malformed legacy lines.
+            }
+        }
+    }
+
+    return ,$ids
+}
+
 $listener = [Windows.UI.Notifications.Management.UserNotificationListener, Windows.UI.Notifications, ContentType = WindowsRuntime]::Current
 
 if ($RequestAccess) {
@@ -132,36 +171,29 @@ if ($accessStatus.ToString() -ne "Allowed") {
     exit 1
 }
 
-$outDir = Split-Path -Parent $OutFile
-if ($outDir) {
-    New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-}
+$currentOutFile = Get-OutputFile
+Ensure-OutputFile -Path $currentOutFile
+$seen = Load-SeenIds -Path $currentOutFile
 
-$seen = [System.Collections.Generic.HashSet[string]]::new()
-if (Test-Path $OutFile) {
-    Get-Content -LiteralPath $OutFile -ErrorAction SilentlyContinue | ForEach-Object {
-        try {
-            $existing = $_ | ConvertFrom-Json
-            if ($existing.id) {
-                [void]$seen.Add([string]$existing.id)
-            }
-        } catch {
-            # Ignore malformed legacy lines.
-        }
-    }
-}
-
-Write-Host "Listening for QQ notifications. Output: $OutFile"
+Write-Host "Listening for QQ notifications. Output: $currentOutFile"
 Write-Host "Apps: $($AppNames -join ', ')"
 
 do {
+    $nextOutFile = Get-OutputFile
+    if ($nextOutFile -ne $currentOutFile) {
+        $currentOutFile = $nextOutFile
+        Ensure-OutputFile -Path $currentOutFile
+        $seen = Load-SeenIds -Path $currentOutFile
+        Write-Host "Rotated output: $currentOutFile"
+    }
+
     $rows = Get-QQNotifications -AllowedAppNames $AppNames
     $newCount = 0
 
     foreach ($row in $rows) {
         if ($seen.Add([string]$row.id)) {
             $json = $row | ConvertTo-Json -Depth 8 -Compress
-            Add-Content -LiteralPath $OutFile -Value $json -Encoding UTF8
+            Add-Content -LiteralPath $currentOutFile -Value $json -Encoding UTF8
             $newCount++
             Write-Host "Captured: $($row.rawText)"
         }
