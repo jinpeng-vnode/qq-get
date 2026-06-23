@@ -29,6 +29,8 @@
       "dist/**/*",
       "electron/**/*",
       "scripts/qq-notification-collector.ps1",
+      "build/icon.ico",
+      "build/icon.png",
       "package.json",
       "LICENSE",
       "README.md"

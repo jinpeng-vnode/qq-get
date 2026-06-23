@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, Menu, Tray, ipcMain } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const { spawn } = require("node:child_process");
@@ -7,6 +7,7 @@ const rootDir = app.getAppPath();
 const collectorCwd = app.isPackaged ? app.getPath("userData") : rootDir;
 const dataDir = app.isPackaged ? path.join(app.getPath("userData"), "data") : path.join(rootDir, "data");
 const logFile = path.join(app.getPath("userData"), "main.log");
+const trayIcon = path.join(rootDir, "build", "icon.ico");
 const collectorScript = app.isPackaged
   ? path.join(process.resourcesPath, "app.asar.unpacked", "scripts", "qq-notification-collector.ps1")
   : path.join(rootDir, "scripts", "qq-notification-collector.ps1");
@@ -26,6 +27,8 @@ let collectorLog = [];
 let collectorWanted = false;
 let collectorRestartTimer = null;
 let collectorRestartCount = 0;
+let tray = null;
+let isQuitting = false;
 
 const maxCollectorRestarts = 5;
 
@@ -34,9 +37,7 @@ if (!gotSingleInstanceLock) {
   app.quit();
 } else {
   app.on("second-instance", () => {
-    if (!mainWindow) return;
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.focus();
+    showMainWindow();
   });
 }
 
@@ -66,6 +67,56 @@ function sendStatus() {
   });
 }
 
+function showMainWindow() {
+  if (!mainWindow) {
+    createWindow();
+    return;
+  }
+
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function updateTrayMenu() {
+  if (!tray) return;
+
+  tray.setToolTip(`QQ 通知采集${collectorProcess ? " - 采集中" : ""}`);
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: "显示主窗口", click: showMainWindow },
+      {
+        label: collectorProcess ? "停止采集" : "启动采集",
+        click: () => {
+          if (collectorProcess) {
+            stopCollector();
+          } else {
+            startCollector();
+          }
+          updateTrayMenu();
+        },
+      },
+      { type: "separator" },
+      {
+        label: "退出",
+        click: () => {
+          isQuitting = true;
+          app.quit();
+        },
+      },
+    ])
+  );
+}
+
+function createTray() {
+  if (tray) return;
+
+  tray = new Tray(trayIcon);
+  tray.on("click", showMainWindow);
+  tray.on("double-click", showMainWindow);
+  updateTrayMenu();
+}
+
 function appendLog(type, text) {
   const lines = String(text)
     .split(/\r?\n/)
@@ -81,6 +132,7 @@ function appendLog(type, text) {
 
   collectorLog = collectorLog.slice(-200);
   sendStatus();
+  updateTrayMenu();
 }
 
 function createWindow() {
@@ -98,6 +150,12 @@ function createWindow() {
     },
   });
   mainWindow.setMenuBarVisibility(false);
+  mainWindow.on("close", (event) => {
+    if (isQuitting) return;
+    event.preventDefault();
+    mainWindow.hide();
+    appendLog("info", "Window hidden to tray");
+  });
 
   if (devServerUrl) {
     mainWindow.loadURL(devServerUrl);
@@ -185,6 +243,7 @@ function spawnCollectorProcess() {
   });
 
   sendStatus();
+  updateTrayMenu();
   return { ok: true, running: true };
 }
 
@@ -231,6 +290,7 @@ function stopCollector() {
   proc.kill();
   appendLog("info", "Collector stop requested");
   sendStatus();
+  updateTrayMenu();
   return { ok: true, running: false };
 }
 
@@ -288,6 +348,7 @@ ipcMain.handle("messages:path", () => dataDir);
 
 if (gotSingleInstanceLock) {
   app.whenReady().then(() => {
+    createTray();
     createWindow();
 
     app.on("activate", () => {
@@ -298,6 +359,7 @@ if (gotSingleInstanceLock) {
   });
 
   app.on("before-quit", () => {
+    isQuitting = true;
     collectorWanted = false;
     clearCollectorRestartTimer();
     if (collectorProcess) {
@@ -306,7 +368,7 @@ if (gotSingleInstanceLock) {
   });
 
   app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") {
+    if (isQuitting && process.platform !== "darwin") {
       app.quit();
     }
   });
