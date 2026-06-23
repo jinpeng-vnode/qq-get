@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { App as AntApp, Button, ConfigProvider, Flex, Input, Layout, Space, Statistic, Table, Tag, Typography, message, theme } from "antd";
+import { App as AntApp, Button, ConfigProvider, Flex, Input, Layout, Space, Statistic, Table, Tabs, Tag, Typography, message, theme } from "antd";
 import { PauseCircleOutlined, PlayCircleOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import zhCN from "antd/locale/zh_CN";
@@ -227,51 +227,68 @@ function Dashboard() {
             </div>
           </section>
 
-          <section className="toolbar">
-            <Input
-              allowClear
-              prefix={<SearchOutlined />}
-              placeholder='关键词搜索：空格=全部命中，-广告=排除，"完整短语"=短语匹配'
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-            <div className="searchHint">
-              <Text type="secondary">
-                示例：<Text code>Claude Kiro -广告</Text> 会查同时包含 Claude 和 Kiro、且不包含广告的通知。
-              </Text>
-            </div>
-          </section>
+          <Tabs
+            className="mainTabs"
+            items={[
+              {
+                key: "messages",
+                label: "消息列表",
+                children: (
+                  <>
+                    <section className="toolbar">
+                      <Input
+                        allowClear
+                        prefix={<SearchOutlined />}
+                        placeholder='关键词搜索：空格=全部命中，-广告=排除，"完整短语"=短语匹配'
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                      />
+                      <div className="searchHint">
+                        <Text type="secondary">
+                          示例：<Text code>Claude Kiro -广告</Text> 会查同时包含 Claude 和 Kiro、且不包含广告的通知。
+                        </Text>
+                      </div>
+                    </section>
 
-          <Table
-            rowKey="id"
-            columns={columns}
-            dataSource={filteredMessages}
-            pagination={{
-              current: currentPage,
-              pageSize: 10,
-              showSizeChanger: false,
-              showTotal: (total) => `共 ${total} 条`,
-              onChange: (page) => setCurrentPage(page),
-            }}
-            size="middle"
-            scroll={{ x: 900 }}
+                    <Table
+                      rowKey="id"
+                      columns={columns}
+                      dataSource={filteredMessages}
+                      pagination={{
+                        current: currentPage,
+                        pageSize: 10,
+                        showSizeChanger: false,
+                        showTotal: (total) => `共 ${total} 条`,
+                        onChange: (page) => setCurrentPage(page),
+                      }}
+                      size="middle"
+                      scroll={{ x: 900 }}
+                    />
+                  </>
+                ),
+              },
+              {
+                key: "logs",
+                label: "运行日志",
+                children: (
+                  <section className="logs">
+                    <div className="logBox">
+                      {status.log.length === 0 ? (
+                        <Text type="secondary">暂无日志</Text>
+                      ) : (
+                        status.log.slice(-80).map((line, index) => (
+                          <div key={`${line.at}-${index}`} className={`logLine ${line.type}`}>
+                            <span>{formatTime(line.at)}</span>
+                            <span>{line.text}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </section>
+                ),
+              },
+            ]}
           />
-
-          <section className="logs">
-            <Text strong>运行日志</Text>
-            <div className="logBox">
-              {status.log.length === 0 ? (
-                <Text type="secondary">暂无日志</Text>
-              ) : (
-                status.log.slice(-20).map((line, index) => (
-                  <div key={`${line.at}-${index}`} className={`logLine ${line.type}`}>
-                    <span>{formatTime(line.at)}</span>
-                    <span>{line.text}</span>
-                  </div>
-                ))
-              )}
-            </div>
-          </section>
         </Content>
       </Layout>
     </AntApp>

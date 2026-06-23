@@ -51,6 +51,13 @@ body {
   padding: 14px 16px;
 }
 
+.mainTabs {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0 16px 16px;
+}
+
 .path {
   display: grid;
   gap: 8px;
@@ -73,12 +80,13 @@ body {
 }
 
 .logs {
-  margin-top: 16px;
+  padding: 0;
+  border: 0;
 }
 
 .logBox {
-  margin-top: 10px;
-  max-height: 180px;
+  max-height: calc(100vh - 310px);
+  min-height: 360px;
   overflow: auto;
   border-radius: 6px;
   background: #0f172a;

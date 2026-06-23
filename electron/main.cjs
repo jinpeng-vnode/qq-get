@@ -97,6 +97,7 @@ function createWindow() {
       nodeIntegration: false,
     },
   });
+  mainWindow.setMenuBarVisibility(false);
 
   if (devServerUrl) {
     mainWindow.loadURL(devServerUrl);
