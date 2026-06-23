@@ -30,6 +30,18 @@ Open the Electron app:
 npm start
 ```
 
+Build a Windows installer:
+
+```powershell
+npm run dist:win
+```
+
+The installer is written to:
+
+```text
+release\QQ通知采集 Setup 1.0.0.exe
+```
+
 For development with hot reload:
 
 ```powershell

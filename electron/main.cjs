@@ -4,8 +4,11 @@ const fs = require("node:fs");
 const { spawn } = require("node:child_process");
 
 const rootDir = app.getAppPath();
-const dataDir = path.join(rootDir, "data");
-const collectorScript = path.join(rootDir, "scripts", "qq-notification-collector.ps1");
+const dataDir = app.isPackaged ? path.join(app.getPath("userData"), "data") : path.join(rootDir, "data");
+const logFile = path.join(app.getPath("userData"), "main.log");
+const collectorScript = app.isPackaged
+  ? path.join(process.resourcesPath, "app.asar.unpacked", "scripts", "qq-notification-collector.ps1")
+  : path.join(rootDir, "scripts", "qq-notification-collector.ps1");
 const devServerArg = process.argv.find((arg) => arg.startsWith("--dev-server="));
 const devServerUrl = devServerArg ? devServerArg.split("=").slice(1).join("=") : "";
 
@@ -17,6 +20,23 @@ let collectorRestartTimer = null;
 let collectorRestartCount = 0;
 
 const maxCollectorRestarts = 5;
+
+function writeMainLog(message) {
+  try {
+    fs.mkdirSync(path.dirname(logFile), { recursive: true });
+    fs.appendFileSync(logFile, `[${new Date().toISOString()}] ${message}\n`, "utf8");
+  } catch {
+    // Keep startup resilient even when logging fails.
+  }
+}
+
+process.on("uncaughtException", (error) => {
+  writeMainLog(`uncaughtException: ${error.stack || error.message}`);
+});
+
+process.on("unhandledRejection", (reason) => {
+  writeMainLog(`unhandledRejection: ${reason?.stack || reason}`);
+});
 
 function sendStatus() {
   if (!mainWindow) return;

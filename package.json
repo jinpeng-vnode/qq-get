@@ -9,16 +9,57 @@
     "dev:electron": "wait-on http://127.0.0.1:5173 && set ELECTRON_RUN_AS_NODE=& electron . --dev-server=http://127.0.0.1:5173",
     "build": "vite build",
     "start": "set ELECTRON_RUN_AS_NODE=& electron .",
+    "pack": "npm run build && electron-builder --dir",
+    "dist:win": "npm run build && electron-builder --win nsis",
     "collector:once": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\\qq-notification-collector.ps1 -Once"
   },
   "keywords": [],
   "author": "",
   "license": "MIT",
   "type": "commonjs",
+  "build": {
+    "appId": "com.jinpengvnode.qqget",
+    "productName": "QQ通知采集",
+    "copyright": "Copyright © 2026 jinpeng-vnode",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "scripts/qq-notification-collector.ps1",
+      "package.json",
+      "LICENSE",
+      "README.md"
+    ],
+    "asarUnpack": [
+      "scripts/qq-notification-collector.ps1"
+    ],
+    "extraMetadata": {
+      "main": "electron/main.cjs"
+    },
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "QQ通知采集"
+    }
+  },
   "dependencies": {
     "@ant-design/icons": "^6.2.5",
     "antd": "^6.4.5",
-    "better-sqlite3": "^12.11.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },
@@ -26,6 +67,7 @@
     "@vitejs/plugin-react": "^6.0.2",
     "concurrently": "^10.0.3",
     "electron": "^42.4.1",
+    "electron-builder": "^26.15.3",
     "typescript": "^6.0.3",
     "vite": "^8.0.16",
     "wait-on": "^9.0.10"
