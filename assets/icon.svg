@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="QQ notification collector icon">
+  <defs>
+    <linearGradient id="bg" x1="36" y1="28" x2="220" y2="228" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0EA5E9"/>
+      <stop offset="0.52" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#4F46E5"/>
+    </linearGradient>
+    <linearGradient id="bubble" x1="74" y1="70" x2="174" y2="176" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#EAF4FF"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="12" stdDeviation="10" flood-color="#0F172A" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+
+  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
+  <circle cx="204" cy="56" r="18" fill="#22C55E"/>
+  <circle cx="204" cy="56" r="30" fill="none" stroke="#BAE6FD" stroke-width="8" opacity="0.38"/>
+
+  <path d="M65 78c0-15.5 12.5-28 28-28h72c15.5 0 28 12.5 28 28v48c0 15.5-12.5 28-28 28h-43l-35 31c-6.6 5.9-17 1.2-17-7.7V153.2C57.8 150.4 49 139.5 49 126V78c0-15.5 12.5-28 28-28h-12z" fill="url(#bubble)" filter="url(#shadow)"/>
+  <path d="M86 91h78M86 119h54" stroke="#2563EB" stroke-width="14" stroke-linecap="round"/>
+
+  <path d="M184 154c14.9 0 27 12.1 27 27s-12.1 27-27 27-27-12.1-27-27 12.1-27 27-27z" fill="#0F172A" opacity="0.18"/>
+  <path d="M184 146c19.3 0 35 15.7 35 35s-15.7 35-35 35-35-15.7-35-35 15.7-35 35-35z" fill="#FFFFFF"/>
+  <path d="M184 164v20l15 9" fill="none" stroke="#2563EB" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
