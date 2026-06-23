@@ -4,8 +4,11 @@ const path = require("node:path");
 
 const rootDir = path.resolve(__dirname, "..");
 const devUrl = "http://127.0.0.1:5173";
-const viteBin = path.join(rootDir, "node_modules", ".bin", process.platform === "win32" ? "vite.cmd" : "vite");
-const electronBin = path.join(rootDir, "node_modules", ".bin", process.platform === "win32" ? "electron.cmd" : "electron");
+const viteEntry = path.join(rootDir, "node_modules", "vite", "bin", "vite.js");
+const electronBin =
+  process.platform === "win32"
+    ? path.join(rootDir, "node_modules", "electron", "dist", "electron.exe")
+    : path.join(rootDir, "node_modules", ".bin", "electron");
 
 let viteProcess = null;
 let electronProcess = null;
@@ -15,7 +18,7 @@ function spawnLogged(command, args, options = {}) {
   const child = spawn(command, args, {
     cwd: rootDir,
     stdio: ["ignore", "pipe", "pipe"],
-    shell: process.platform === "win32",
+    shell: false,
     ...options,
   });
 
@@ -79,7 +82,7 @@ process.on("SIGTERM", () => shutdown(0));
 
 async function main() {
   console.log("[dev] starting Vite dev server...");
-  viteProcess = spawnLogged(viteBin, ["--host", "127.0.0.1"]);
+  viteProcess = spawnLogged(process.execPath, [viteEntry, "--host", "127.0.0.1", "--port", "5173", "--strictPort"]);
 
   console.log(`[dev] waiting for ${devUrl}...`);
   await waitForHttp(devUrl);
@@ -88,7 +91,7 @@ async function main() {
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
 
-  electronProcess = spawnLogged(electronBin, [".", `--dev-server=${devUrl}`], {
+  electronProcess = spawnLogged(electronBin, [rootDir, `--dev-server=${devUrl}`], {
     env,
   });
 }
