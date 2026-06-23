@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const { spawn } = require("node:child_process");
 
 const rootDir = app.getAppPath();
+const collectorCwd = app.isPackaged ? app.getPath("userData") : rootDir;
 const dataDir = app.isPackaged ? path.join(app.getPath("userData"), "data") : path.join(rootDir, "data");
 const logFile = path.join(app.getPath("userData"), "main.log");
 const collectorScript = app.isPackaged
@@ -122,6 +123,7 @@ function spawnCollectorProcess() {
 
   const powershellPath = resolvePowerShellPath();
   appendLog("info", `Collector using PowerShell: ${powershellPath}`);
+  appendLog("info", `Collector cwd: ${collectorCwd}`);
 
   collectorProcess = spawn(
     powershellPath,
@@ -139,7 +141,7 @@ function spawnCollectorProcess() {
       "2",
     ],
     {
-      cwd: rootDir,
+      cwd: collectorCwd,
       windowsHide: true,
     }
   );
