@@ -9,6 +9,13 @@ const logFile = path.join(app.getPath("userData"), "main.log");
 const collectorScript = app.isPackaged
   ? path.join(process.resourcesPath, "app.asar.unpacked", "scripts", "qq-notification-collector.ps1")
   : path.join(rootDir, "scripts", "qq-notification-collector.ps1");
+const powershellCandidates = [
+  path.join(process.env.WINDIR || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
+  path.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
+  path.join(process.env.ProgramFiles || "C:\\Program Files", "PowerShell", "7", "pwsh.exe"),
+  "powershell.exe",
+  "pwsh.exe",
+];
 const devServerArg = process.argv.find((arg) => arg.startsWith("--dev-server="));
 const devServerUrl = devServerArg ? devServerArg.split("=").slice(1).join("=") : "";
 
@@ -93,6 +100,19 @@ function clearCollectorRestartTimer() {
   }
 }
 
+function resolvePowerShellPath() {
+  for (const candidate of powershellCandidates) {
+    if (path.isAbsolute(candidate)) {
+      if (fs.existsSync(candidate)) return candidate;
+      continue;
+    }
+
+    return candidate;
+  }
+
+  return "powershell.exe";
+}
+
 function spawnCollectorProcess() {
   if (collectorProcess) {
     return { ok: true, running: true };
@@ -100,8 +120,11 @@ function spawnCollectorProcess() {
 
   fs.mkdirSync(dataDir, { recursive: true });
 
+  const powershellPath = resolvePowerShellPath();
+  appendLog("info", `Collector using PowerShell: ${powershellPath}`);
+
   collectorProcess = spawn(
-    "powershell.exe",
+    powershellPath,
     [
       "-NoLogo",
       "-NoProfile",
@@ -121,12 +144,19 @@ function spawnCollectorProcess() {
     }
   );
 
-  appendLog("info", `Collector started, pid=${collectorProcess.pid}`);
+  if (collectorProcess.pid) {
+    appendLog("info", `Collector started, pid=${collectorProcess.pid}`);
+  }
 
   collectorProcess.stdout.on("data", (data) => appendLog("stdout", data));
   collectorProcess.stderr.on("data", (data) => appendLog("stderr", data));
   collectorProcess.on("error", (error) => {
     appendLog("stderr", `Collector process error: ${error.message}`);
+    collectorProcess = null;
+    if (collectorWanted) {
+      scheduleCollectorRestart();
+    }
+    sendStatus();
   });
   collectorProcess.on("exit", (code, signal) => {
     appendLog("info", `Collector exited, code=${code}, signal=${signal ?? ""}`);
