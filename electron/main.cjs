@@ -29,6 +29,17 @@ let collectorRestartCount = 0;
 
 const maxCollectorRestarts = 5;
 
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  });
+}
+
 function writeMainLog(message) {
   try {
     fs.mkdirSync(path.dirname(logFile), { recursive: true });
@@ -163,7 +174,10 @@ function spawnCollectorProcess() {
   collectorProcess.on("exit", (code, signal) => {
     appendLog("info", `Collector exited, code=${code}, signal=${signal ?? ""}`);
     collectorProcess = null;
-    if (collectorWanted) {
+    if (code === 2) {
+      appendLog("stderr", "Collector is already running in another process.");
+      collectorWanted = false;
+    } else if (collectorWanted) {
       scheduleCollectorRestart();
     }
     sendStatus();
@@ -230,8 +244,7 @@ function readMessages() {
     .sort()
     .flatMap((fileName) => {
       const filePath = path.join(dataDir, fileName);
-      return fs
-        .readFileSync(filePath, "utf8")
+      return readTextFileWithRetry(filePath)
         .split(/\r?\n/)
         .filter(Boolean)
         .map((line) => {
@@ -246,6 +259,22 @@ function readMessages() {
     .sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime());
 }
 
+function readTextFileWithRetry(filePath, attempts = 5) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return fs.readFileSync(filePath, "utf8");
+    } catch (error) {
+      if (attempt === attempts) {
+        appendLog("stderr", `Read skipped: ${path.basename(filePath)} (${error.code || error.message})`);
+        return "";
+      }
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, attempt * 40);
+    }
+  }
+
+  return "";
+}
+
 ipcMain.handle("collector:start", () => startCollector());
 ipcMain.handle("collector:stop", () => stopCollector());
 ipcMain.handle("collector:status", () => ({
@@ -256,26 +285,28 @@ ipcMain.handle("collector:status", () => ({
 ipcMain.handle("messages:list", () => readMessages());
 ipcMain.handle("messages:path", () => dataDir);
 
-app.whenReady().then(() => {
-  createWindow();
+if (gotSingleInstanceLock) {
+  app.whenReady().then(() => {
+    createWindow();
 
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+      }
+    });
+  });
+
+  app.on("before-quit", () => {
+    collectorWanted = false;
+    clearCollectorRestartTimer();
+    if (collectorProcess) {
+      collectorProcess.kill();
     }
   });
-});
 
-app.on("before-quit", () => {
-  collectorWanted = false;
-  clearCollectorRestartTimer();
-  if (collectorProcess) {
-    collectorProcess.kill();
-  }
-});
-
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
-});
+  app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") {
+      app.quit();
+    }
+  });
+}

@@ -11,6 +11,21 @@ $ErrorActionPreference = "Stop"
 
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
 
+$collectorMutex = [System.Threading.Mutex]::new($false, "Local\QQGetNotificationCollector")
+$collectorMutexAcquired = $collectorMutex.WaitOne(0)
+if (-not $collectorMutexAcquired) {
+    [Console]::Error.WriteLine("Another QQ notification collector is already running.")
+    exit 2
+}
+
+trap {
+    if ($collectorMutexAcquired) {
+        $collectorMutex.ReleaseMutex()
+        $collectorMutex.Dispose()
+    }
+    break
+}
+
 function Await-WinRtOperation {
     param(
         [Parameter(Mandatory = $true)] $Operation,
@@ -157,6 +172,40 @@ function Load-SeenIds {
     return ,$ids
 }
 
+function Add-JsonLine {
+    param(
+        [Parameter(Mandatory = $true)] [string]$Path,
+        [Parameter(Mandatory = $true)] [string]$Line
+    )
+
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($Line + [Environment]::NewLine)
+    $maxAttempts = 8
+
+    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+        $stream = $null
+        try {
+            $stream = [System.IO.FileStream]::new(
+                $Path,
+                [System.IO.FileMode]::Append,
+                [System.IO.FileAccess]::Write,
+                [System.IO.FileShare]::ReadWrite
+            )
+            $stream.Write($bytes, 0, $bytes.Length)
+            return
+        } catch {
+            if ($attempt -eq $maxAttempts) {
+                throw
+            }
+
+            Start-Sleep -Milliseconds (80 * $attempt)
+        } finally {
+            if ($stream) {
+                $stream.Dispose()
+            }
+        }
+    }
+}
+
 $listener = [Windows.UI.Notifications.Management.UserNotificationListener, Windows.UI.Notifications, ContentType = WindowsRuntime]::Current
 
 if ($RequestAccess) {
@@ -193,7 +242,7 @@ do {
     foreach ($row in $rows) {
         if ($seen.Add([string]$row.id)) {
             $json = $row | ConvertTo-Json -Depth 8 -Compress
-            Add-Content -LiteralPath $currentOutFile -Value $json -Encoding UTF8
+            Add-JsonLine -Path $currentOutFile -Line $json
             $newCount++
             Write-Host "Captured: $($row.rawText)"
         }
@@ -206,3 +255,8 @@ do {
 
     Start-Sleep -Seconds $IntervalSeconds
 } while ($true)
+
+if ($collectorMutexAcquired) {
+    $collectorMutex.ReleaseMutex()
+    $collectorMutex.Dispose()
+}
